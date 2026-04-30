@@ -378,7 +378,6 @@ app.post('/api/wecom/callback', express.raw({ type: 'application/xml', limit: '1
         console.error('Callback error:', e);
         res.json({ success: true });
       }
-    });
 });
 
 // --- Chinese Numeral to Digits ---
