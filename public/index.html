@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="土豆待办">
+  <meta name="theme-color" content="#007aff">
+  <meta name="description" content="轻量待办清单 - 支持企业微信自动创建">
+  <title>土豆待办清单</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📝</text></svg>">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <h1>土豆待办清单</h1>
+        <span class="stats" id="stats"></span>
+      </div>
+      <div class="header-right">
+        <button class="btn-icon" id="btn-add" title="添加待办">+</button>
+      </div>
+    </header>
+
+    <!-- Filter tabs -->
+    <div class="tabs">
+      <button class="tab active" data-filter="all">全部</button>
+      <button class="tab" data-filter="active">待完成</button>
+      <button class="tab" data-filter="completed">已完成</button>
+    </div>
+
+    <!-- Todo list -->
+    <div class="todo-list" id="todo-list">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">📋</div>
+        <p>还没有待办事项</p>
+        <p class="empty-hint">在下方输入框快速添加</p>
+      </div>
+    </div>
+
+    <!-- Bottom quick input bar -->
+    <div class="quick-bar" id="quick-bar">
+      <div class="quick-input-wrap">
+        <input type="text" id="quick-input" placeholder="输入待办事项..." maxlength="200" autocomplete="off">
+        <button class="quick-send" id="quick-send" disabled>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Add/Edit modal -->
+    <div class="modal-overlay" id="modal">
+      <div class="modal">
+        <div class="modal-header">
+          <h2 id="modal-title">添加待办</h2>
+          <button class="btn-close" id="btn-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="todo-id">
+          <div class="form-group">
+            <label>待办内容 *</label>
+            <input type="text" id="input-title" placeholder="输入内容，自动识别时间" maxlength="100">
+            <div class="title-hint" id="title-hint"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>截止日期</label>
+              <input type="date" id="input-date">
+            </div>
+            <div class="form-group">
+              <label>截止时间</label>
+              <input type="time" id="input-time">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>提醒时间</label>
+            <input type="datetime-local" id="input-reminder">
+          </div>
+          <div class="form-group">
+            <label>优先级</label>
+            <div class="priority-group">
+              <button class="priority-btn" data-priority="low">低</button>
+              <button class="priority-btn active" data-priority="normal">普通</button>
+              <button class="priority-btn" data-priority="high">高</button>
+              <button class="priority-btn" data-priority="urgent">紧急</button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="btn-cancel">取消</button>
+          <button class="btn btn-primary" id="btn-save">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
