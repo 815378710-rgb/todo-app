@@ -462,7 +462,7 @@ function bindEvents() {
   });
 }
 
-function quickSubmit() {
+async function quickSubmit() {
   const title = quickInput.value.trim();
   if (!title) return;
 
@@ -472,12 +472,25 @@ function quickSubmit() {
   // Try to parse natural language for date/time
   const parsed = parseQuickInput(title);
 
-  createTodo({
-    title: parsed.title,
-    dueDate: parsed.dueDate,
-    dueTime: parsed.dueTime,
-    priority: 'normal'
-  });
+  try {
+    const result = await api('POST', '/todos', {
+      title: parsed.title,
+      dueDate: parsed.dueDate,
+      dueTime: parsed.dueTime,
+      priority: 'normal'
+    });
+    if (result.success) {
+      todos.unshift(result.data);
+      render();
+      showToast('已添加');
+    } else {
+      showToast(result.message || '添加失败');
+      quickInput.value = title; // restore input
+    }
+  } catch (e) {
+    showToast('添加失败，请检查网络');
+    quickInput.value = title; // restore input
+  }
 
   quickInput.blur();
 }
