@@ -1,15 +1,15 @@
-const CACHE_NAME = 'potato-todo-v1';
+const CACHE_NAME = 'potato-todo-v2';
 const STATIC_ASSETS = [
   '/',
-  '/css/style.css',
-  '/js/app.js',
   '/manifest.json'
 ];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(STATIC_ASSETS))
+      .then(cache => Promise.all(STATIC_ASSETS.map(url =>
+        fetch(new Request(url, { cache: 'no-store' })).then(r => cache.put(url, r))
+      )))
       .then(() => self.skipWaiting())
   );
 });
@@ -25,37 +25,41 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
-  // API requests: network only
+  // API requests: network only, bypass HTTP cache
   if (url.pathname.startsWith('/api/')) {
-    e.respondWith(fetch(e.request));
+    e.respondWith(fetch(new Request(e.request, { cache: 'no-store' })));
     return;
   }
 
-  // HTML requests: network first to ensure fresh content, fall back to cache
-  if (e.request.mode === 'navigate' || url.pathname.endsWith('.html')) {
+  // HTML/CSS/JS: always network (bypass HTTP cache), fall back to SW cache
+  if (e.request.mode === 'navigate' || url.pathname.endsWith('.html') ||
+      url.pathname.endsWith('.css') || url.pathname.endsWith('.js') ||
+      url.pathname === '/') {
     e.respondWith(
-      fetch(e.request).then(response => {
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
-        }
-        return response;
-      }).catch(() => caches.match(e.request))
+      fetch(new Request(e.request, { cache: 'no-store' }))
+        .then(response => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(e.request))
     );
     return;
   }
 
-  // Static assets: cache first, then network
+  // Other static assets (icons, manifest): cache first, then network
   e.respondWith(
     caches.match(e.request).then(cached => {
-      const fetched = fetch(e.request).then(response => {
+      if (cached) return cached;
+      return fetch(e.request).then(response => {
         if (response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
         }
         return response;
-      }).catch(() => cached);
-      return cached || fetched;
+      });
     })
   );
 });

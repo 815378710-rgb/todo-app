@@ -82,6 +82,13 @@ function saveTodos(data) {
 app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+// Disable caching for sw.js to ensure service worker updates are picked up
+app.use((req, res, next) => {
+  if (req.url === '/sw.js') {
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  }
+  next();
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Global error handler — must be defined after routes but before app.listen
@@ -291,93 +298,93 @@ app.post('/api/wecom/callback', express.raw({ type: 'application/xml', limit: '1
     return res.json({ success: true });
   }
 
-      // Parse XML body — req.body is a Buffer from express.raw
-      const xmlBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
+  // Parse XML body — req.body is a Buffer from express.raw
+  const xmlBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
+  try {
+    let xml2js;
+    try {
+      xml2js = require('xml2js');
+    } catch (e) {
+      console.error('xml2js module not found:', e.message);
+      return res.json({ success: true });
+    }
+    xml2js.parseString(xmlBody, { explicitArray: false }, (err, result) => {
+      if (err) {
+        console.error('XML parse error:', err);
+        return res.json({ success: true });
+      }
+
+      const msgNode = result.xml;
+      if (!msgNode || !msgNode.Encrypt) {
+        return res.json({ success: true });
+      }
+
+      // Verify signature
+      if (!verifyWecomSignature(cfg.token, timestamp, nonce, msgNode.Encrypt, msg_signature)) {
+        console.error('POST signature mismatch');
+        return res.status(403).send('signature mismatch');
+      }
+
+      // Decrypt message
+      let parsed;
       try {
-        let xml2js;
-        try {
-          xml2js = require('xml2js');
-        } catch (e) {
-          console.error('xml2js module not found:', e.message);
-          return res.json({ success: true });
-        }
-        xml2js.parseString(xmlBody, { explicitArray: false }, (err, result) => {
-          if (err) {
-            console.error('XML parse error:', err);
-            return res.json({ success: true });
-          }
-
-          const msgNode = result.xml;
-          if (!msgNode || !msgNode.Encrypt) {
-            return res.json({ success: true });
-          }
-
-          // Verify signature
-          if (!verifyWecomSignature(cfg.token, timestamp, nonce, msgNode.Encrypt, msg_signature)) {
-            console.error('POST signature mismatch');
-            return res.status(403).send('signature mismatch');
-          }
-
-          // Decrypt message
-          let parsed;
-          try {
-            const { msg } = decryptWecomMessage(msgNode.Encrypt, cfg.encoding_aes_key);
-            // Parse the decrypted XML
-            xml2js.parseString(msg, { explicitArray: false }, (e2, r2) => {
-              if (e2) throw e2;
-              parsed = r2.xml;
-            });
-          } catch (e) {
-            console.error('Decrypt error:', e.message);
-            return res.json({ success: true });
-          }
-
-          if (!parsed || parsed.MsgType !== 'text') {
-            return res.json({ success: true });
-          }
-
-          const userId = parsed.FromUserName;
-          const content = parsed.Content || '';
-
-          // Parse natural language
-          const parsedTodo = parseNaturalLanguage(content);
-
-          // Create todo
-          const data = loadTodos();
-          const todo = {
-            id: uuidv4(),
-            title: parsedTodo.title,
-            content: '',
-            dueDate: parsedTodo.dueDate,
-            dueTime: parsedTodo.dueTime,
-            reminder: parsedTodo.reminder,
-            priority: 'normal',
-            tags: [],
-            completed: false,
-            completedAt: null,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            source: 'wecom',
-            wecomUserId: userId
-          };
-          data.todos.push(todo);
-          saveTodos(data);
-
-          // Reply to user
-          const replyText = formatReply(todo);
-          sendWecomMessage(userId, replyText);
-
-          // Set reminder if applicable
-          if (todo.reminder) {
-            scheduleReminder(todo);
-          }
-
-          res.json({ success: true });
+        const { msg } = decryptWecomMessage(msgNode.Encrypt, cfg.encoding_aes_key);
+        // Parse the decrypted XML
+        xml2js.parseString(msg, { explicitArray: false }, (e2, r2) => {
+          if (e2) throw e2;
+          parsed = r2.xml;
         });
       } catch (e) {
-        console.error('Callback error:', e);
-        res.json({ success: true });
+        console.error('Decrypt error:', e.message);
+        return res.json({ success: true });
       }
+
+      if (!parsed || parsed.MsgType !== 'text') {
+        return res.json({ success: true });
+      }
+
+      const userId = parsed.FromUserName;
+      const content = parsed.Content || '';
+
+      // Parse natural language
+      const parsedTodo = parseNaturalLanguage(content);
+
+      // Create todo
+      const data = loadTodos();
+      const todo = {
+        id: uuidv4(),
+        title: parsedTodo.title,
+        content: '',
+        dueDate: parsedTodo.dueDate,
+        dueTime: parsedTodo.dueTime,
+        reminder: parsedTodo.reminder,
+        priority: 'normal',
+        tags: [],
+        completed: false,
+        completedAt: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        source: 'wecom',
+        wecomUserId: userId
+      };
+      data.todos.push(todo);
+      saveTodos(data);
+
+      // Reply to user
+      const replyText = formatReply(todo);
+      sendWecomMessage(userId, replyText);
+
+      // Set reminder if applicable
+      if (todo.reminder) {
+        scheduleReminder(todo);
+      }
+
+      res.json({ success: true });
+    });
+  } catch (e) {
+    console.error('Callback error:', e);
+    res.json({ success: true });
+  }
 });
 
 // --- Chinese Numeral to Digits ---
