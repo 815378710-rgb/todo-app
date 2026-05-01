@@ -417,6 +417,7 @@ function parseNaturalLanguage(text) {
 
   // Time patterns — match against normalized text (Arabic digits)
   // The "钟" after 点/时 is optional and must not block matching
+  // IMPORTANT: [点时:：] is REQUIRED for time-only patterns to avoid "16日" being misread as "16:00"
   const timePatterns = [
     // 今天/明天/后天 + 时间
     { regex: /(今天|今日)\s*(上午|下午|晚上|早上)?\s*(\d{1,2})\s*[点时:：]\s*(?:钟)?\s*(\d{1,2})?/, type: 'today' },
@@ -424,14 +425,16 @@ function parseNaturalLanguage(text) {
     { regex: /(后天)\s*(上午|下午|晚上|早上)?\s*(\d{1,2})\s*[点时:：]\s*(?:钟)?\s*(\d{1,2})?/, type: 'dayafter' },
     { regex: /(大后天)\s*(上午|下午|晚上|早上)?\s*(\d{1,2})\s*[点时:：]\s*(?:钟)?\s*(\d{1,2})?/, type: 'day3' },
     // N天后
-    { regex: /(\d+)\s*天后\s*(上午|下午|晚上|早上)?\s*(\d{1,2})?\s*[点时:：]?\s*(?:钟)?\s*(\d{1,2})?/, type: 'nDays' },
-    // 周X + 时间
-    { regex: /(周[一二三四五六日天0-9]|星期[一二三四五六日天0-9])\s*(上午|下午|晚上|早上)?\s*(\d{1,2})?\s*[点时:：]?\s*(?:钟)?\s*(\d{1,2})?/, type: 'weekday' },
-    // 下周X
-    { regex: /下周([一二三四五六日天0-9]|星期[一二三四五六日天0-9])\s*(上午|下午|晚上|早上)?\s*(\d{1,2})?\s*[点时:：]?\s*(?:钟)?\s*(\d{1,2})?/, type: 'nextWeek' },
+    { regex: /(\d+)\s*天后\s*(上午|下午|晚上|早上)?\s*(\d{1,2})?\s*[点时:：]\s*(\d{1,2})?/, type: 'nDays' },
+    // 周X + time (time required)
+    { regex: /(周[一二三四五六日天0-9]|星期[一二三四五六日天0-9])\s*(上午|下午|晚上|早上)?\s*(\d{1,2})\s*[点时:：]\s*(\d{1,2})?/, type: 'weekday' },
+    // 下周X + time (time required)
+    { regex: /下周([一二三四五六日天0-9]|星期[一二三四五六日天0-9])\s*(上午|下午|晚上|早上)?\s*(\d{1,2})\s*[点时:：]\s*(\d{1,2})?/, type: 'nextWeek' },
     // 具体日期 X月X日
-    { regex: /(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]\s*(上午|下午|晚上|早上)?\s*(\d{1,2})?\s*[点时:：]?\s*(?:钟)?\s*(\d{1,2})?/, type: 'specific' },
-    // Time only (e.g. 一点钟, 上午三点) — no date prefix
+    { regex: /(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]\s*(上午|下午|晚上|早上)?\s*(\d{1,2})?\s*[点时:：]?\s*(\d{1,2})?/, type: 'specific' },
+    // X日/X号 (current month) + optional time (MUST come before time-only patterns)
+    { regex: /(\d{1,2})\s*[日号]\s*(上午|下午|晚上|早上)?\s*(\d{1,2})?\s*[点时:：]?\s*(\d{1,2})?/, type: 'dayOfMonth' },
+    // Time only (e.g. 一点钟, 上午三点) — [点时:：] required
     { regex: /(上午|下午|晚上|早上)\s*(\d{1,2})\s*[点时:：]\s*(?:钟)?\s*(\d{1,2})?/, type: 'timeonly' },
     { regex: /(\d{1,2})\s*[点时:：]\s*(?:钟)?\s*(\d{1,2})?/, type: 'timeonly' },
   ];
@@ -539,6 +542,21 @@ function parseNaturalLanguage(text) {
           dueDate = localDateStr(d);
           break;
         }
+        case 'dayOfMonth': {
+          const day = parseInt(m[1]);
+          if (day >= 1 && day <= 31) {
+            period = m[2];
+            hour = m[3] ? parseInt(m[3]) : null;
+            minute = m[4] ? parseInt(m[4]) : 0;
+            const d = new Date(now.getFullYear(), now.getMonth(), day);
+            // If the date already passed this month, use next month
+            if (d < new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
+              d.setMonth(d.getMonth() + 1);
+            }
+            dueDate = localDateStr(d);
+          }
+          break;
+        }
         case 'timeonly': {
           // Time without date prefix — default to today
           period = m[1] && /^(上午|下午|晚上|早上)$/.test(m[1]) ? m[1] : null;
@@ -581,6 +599,7 @@ function parseNaturalLanguage(text) {
         .replace(/(?:周[一二三四五六日天\d]|星期[一二三四五六日天\d])\s*/g, '')
         .replace(/(?:下周|这周|本周)\s*/g, '')
         .replace(/\d{1,2}\s*月\s*\d{1,2}\s*[日号]\s*/g, '')
+        .replace(/[一二两三四五六七八九十\d]{1,4}\s*[日号]\s*/g, '')
         .replace(/[一二两三四五六七八九十\d]{1,4}\s*[点时:：]\s*(?:钟)?\s*[一二两三四五六七八九十\d]{0,4}\s*分?/g, '')
         .replace(/\s+/g, ' ')
         .trim();

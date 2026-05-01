@@ -521,8 +521,42 @@ function parseQuickInput(text) {
   // Normalize Chinese numerals to Arabic so regex can match
   const normalized = normalizeChineseNumbers(text);
 
-  // === Pattern 1: Weekday (周X / 下周X) with optional time ===
-  const weekdayRe = /(?:下周|这周|本周)?\s*(周[一二三四五六日天0-9]|星期[一二三四五六日天0-9])\s*(?:上午|下午|早上|晚上)?\s*(\d{1,2})?\s*[点时:：]?\s*(?:钟)?\s*(\d{1,2})?/u;
+  // === Pattern 0: X日/X号 (当前月的某天) + optional time ===
+  const dayOfMonthRe = /(\d{1,2})\s*[日号]\s*(?:上午|下午|早上|晚上)?\s*(\d{1,2})?\s*[点时:：]\s*(\d{1,2})?/u;
+  const dayOfMonthMatch = normalized.match(dayOfMonthRe);
+  if (dayOfMonthMatch) {
+    const day = parseInt(dayOfMonthMatch[1]);
+    if (day >= 1 && day <= 31) {
+      const d = new Date(now.getFullYear(), now.getMonth(), day);
+      // If the date has already passed this month, use next month
+      if (d < new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
+        d.setMonth(d.getMonth() + 1);
+      }
+      dueDate = localDateStr(d);
+
+      if (dayOfMonthMatch[2]) {
+        let hour = parseInt(dayOfMonthMatch[2]);
+        const period = text.match(/(上午|下午|早上|晚上)/);
+        if (period) {
+          const p = period[1];
+          if ((p === '下午' || p === '晚上') && hour < 12) hour += 12;
+        }
+        const min = dayOfMonthMatch[3] ? parseInt(dayOfMonthMatch[3]) : 0;
+        dueTime = String(hour).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+      }
+
+      // Clean title
+      cleanTitle = text.replace(/[一二两三四五六七八九十\d]{1,4}\s*[日号]\s*/g, '')
+                       .replace(/(?:上午|下午|早上|晚上)/g, '')
+                       .replace(/[一二两三四五六七八九十\d]{1,4}\s*[点时:：]\s*(?:钟)?\s*[一二两三四五六七八九十\d]{0,4}\s*分?/g, '')
+                       .replace(/\s+/g, ' ').trim();
+      if (!cleanTitle) cleanTitle = text;
+      return { title: cleanTitle, dueDate, dueTime };
+    }
+  }
+
+  // === Pattern 1: Weekday (周X / 下周X) with required time ===
+  const weekdayRe = /(?:下周|这周|本周)?\s*(周[一二三四五六日天0-9]|星期[一二三四五六日天0-9])\s*(?:上午|下午|早上|晚上)?\s*(\d{1,2})\s*[点时:：]\s*(\d{1,2})?/u;
   const weekdayMatch = normalized.match(weekdayRe);
   if (weekdayMatch) {
     const dayMap = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '日': 0, '天': 0, '0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6 };
@@ -562,7 +596,8 @@ function parseQuickInput(text) {
   }
 
   // === Pattern 2: Relative day (今天/明天/后天/大后天/N天后) + time ===
-  const timeRe = /(?:今天|明日|明天|后天|大后天|(\d+)天后)?\s*(?:上午|下午|早上|晚上)?\s*(\d{1,2})\s*[点时:：]?\s*(?:钟)?\s*(\d{1,2})?/u;
+  // IMPORTANT: [点时:：] is REQUIRED — without it "16日" would be misread as "16:00"
+  const timeRe = /(?:今天|今日|明日|明天|后天|大后天|(\d+)天后)\s*(?:上午|下午|早上|晚上)?\s*(\d{1,2})\s*[点时:：]\s*(\d{1,2})?/u;
 
   const timeMatch = normalized.match(timeRe);
   if (timeMatch && timeMatch[2]) {
