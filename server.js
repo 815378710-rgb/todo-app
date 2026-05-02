@@ -8,6 +8,7 @@ const https = require('https');
 const http = require('http');
 
 const app = express();
+function sanitizeInput(s){if(typeof s!=="string")return s;return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;").replace(/'/g,"&#x27;").trim();}
 const PORT = process.env.PORT || 8900;
 
 // --- Local date helper (avoids UTC offset issues) ---
@@ -144,8 +145,8 @@ app.post('/api/todos', (req, res) => {
   const data = loadTodos();
   const todo = {
     id: uuidv4(),
-    title: title.trim(),
-    content: (content || '').trim(),
+    title: sanitizeInput(title.trim()),
+    content: sanitizeInput(content || '').trim(),
     dueDate: dueDate || null,
     dueTime: dueTime || null,
     reminder: reminder || null,
@@ -170,7 +171,7 @@ app.put('/api/todos/:id', (req, res) => {
   if (!todo) return res.status(404).json({ success: false, message: '待办不存在' });
 
   const { title, content, dueDate, dueTime, reminder, priority, tags } = req.body;
-  if (title !== undefined) todo.title = title.trim();
+  if (title !== undefined) todo.title = sanitizeInput(title.trim());
   if (content !== undefined) todo.content = content.trim();
   if (dueDate !== undefined) todo.dueDate = dueDate || null;
   if (dueTime !== undefined) todo.dueTime = dueTime || null;
